@@ -9,8 +9,8 @@ class HiveBoostCard extends HTMLElement {
       "1.5h": "01:30:00",
       "2h": "02:00:00",
     };
-    this._state = { up: "Off", down: "Off", water: "Off" };
-    this._prevActive = { up: false, down: false, water: false };
+    this._state = {};
+    this._prevActive = {};
     this._holdTimers = {};
     this._holdTriggered = {};
   }
@@ -21,13 +21,15 @@ class HiveBoostCard extends HTMLElement {
 
   static getStubConfig() {
     return {
+      zone_count: 2,
       temperature: 21.0,
-      up_name: "Upstairs",
-      up_climate: "",
-      up_sensor: "",
-      down_name: "Downstairs",
-      down_climate: "",
-      down_sensor: "",
+      zone_1_name: "Upstairs",
+      zone_1_climate: "",
+      zone_1_sensor: "",
+      zone_2_name: "Downstairs",
+      zone_2_climate: "",
+      zone_2_sensor: "",
+      water_enabled: true,
       water_name: "Hot Water Boost",
       water_entity: "",
       water_sensor: "",
@@ -35,13 +37,34 @@ class HiveBoostCard extends HTMLElement {
   }
 
   setConfig(config) {
+    // Support legacy up_/down_ keys seamlessly if migrating
+    const migrated = { ...config };
+    if (migrated.up_climate && !migrated.zone_1_climate) {
+      migrated.zone_1_climate = migrated.up_climate;
+      migrated.zone_1_name = migrated.up_name || "Upstairs";
+      migrated.zone_1_sensor = migrated.up_sensor || "";
+    }
+    if (migrated.down_climate && !migrated.zone_2_climate) {
+      migrated.zone_2_climate = migrated.down_climate;
+      migrated.zone_2_name = migrated.down_name || "Downstairs";
+      migrated.zone_2_sensor = migrated.down_sensor || "";
+    }
+
     this._config = {
+      zone_count: 2,
       temperature: 21.0,
-      up_name: "Upstairs",
-      down_name: "Downstairs",
+      water_enabled: true,
       water_name: "Hot Water Boost",
-      ...config,
+      ...migrated,
     };
+
+    const count = Number(this._config.zone_count) || 0;
+    for (let i = 1; i <= count; i++) {
+      const key = `zone_${i}`;
+      if (!this._state[key]) this._state[key] = "Off";
+    }
+    if (!this._state.water) this._state.water = "Off";
+
     this._render();
   }
 
@@ -53,25 +76,31 @@ class HiveBoostCard extends HTMLElement {
 
   _syncExternalResets() {
     if (!this._hass || !this._config) return;
-    const map = {
-      up: this._config.up_sensor,
-      down: this._config.down_sensor,
-      water: this._config.water_sensor,
-    };
+    const count = Number(this._config.zone_count) || 0;
 
-    Object.entries(map).forEach(([key, sensorId]) => {
-      if (!sensorId || !this._hass.states[sensorId]) return;
-      const isActive = this._hass.states[sensorId].state === "on";
-      if (this._prevActive[key] && !isActive && this._state[key] !== "Off") {
-        this._state[key] = "Off";
-      }
-      this._prevActive[key] = isActive;
-    });
+    for (let i = 1; i <= count; i++) {
+      const key = `zone_${i}`;
+      const sensorId = this._config[`${key}_sensor`];
+      this._checkSensorReset(key, sensorId);
+    }
+
+    if (this._config.water_enabled) {
+      this._checkSensorReset("water", this._config.water_sensor);
+    }
+  }
+
+  _checkSensorReset(key, sensorId) {
+    if (!sensorId || !this._hass.states[sensorId]) return;
+    const isActive = this._hass.states[sensorId].state === "on";
+    if (this._prevActive[key] && !isActive && this._state[key] !== "Off") {
+      this._state[key] = "Off";
+    }
+    this._prevActive[key] = isActive;
   }
 
   _handleTap(key) {
     if (!this._hass || !this._config) return;
-    const currentIdx = this._stages.indexOf(this._state[key]);
+    const currentIdx = this._stages.indexOf(this._state[key] || "Off");
     const nextStage = this._stages[(currentIdx + 1) % this._stages.length];
     this._state[key] = nextStage;
     this._updateUI();
@@ -91,8 +120,7 @@ class HiveBoostCard extends HTMLElement {
         });
       }
     } else {
-      const entity =
-        key === "up" ? this._config.up_climate : this._config.down_climate;
+      const entity = this._config[`${key}_climate`];
       if (!entity) return;
       if (nextStage === "Off") {
         this._hass.callService("hive", "boost_heating_off", {
@@ -117,14 +145,13 @@ class HiveBoostCard extends HTMLElement {
       this._hass.callService("hive", "boost_hot_water_off", {
         entity_id: this._config.water_entity,
       });
-    } else if (key === "up" && this._config.up_climate) {
-      this._hass.callService("hive", "boost_heating_off", {
-        entity_id: this._config.up_climate,
-      });
-    } else if (key === "down" && this._config.down_climate) {
-      this._hass.callService("hive", "boost_heating_off", {
-        entity_id: this._config.down_climate,
-      });
+    } else {
+      const entity = this._config[`${key}_climate`];
+      if (entity) {
+        this._hass.callService("hive", "boost_heating_off", {
+          entity_id: entity,
+        });
+      }
     }
   }
 
@@ -150,10 +177,42 @@ class HiveBoostCard extends HTMLElement {
   }
 
   _render() {
+    if (!this._config) return;
+    const count = Number(this._config.zone_count) || 0;
+    const showWater = this._config.water_enabled !== false;
+
+    let zoneCardsHtml = "";
+    for (let i = 1; i <= count; i++) {
+      const key = `zone_${i}`;
+      zoneCardsHtml += `
+        <ha-card id="card-${key}">
+          <div class="icon-wrap" id="icon-${key}"><ha-icon icon="mdi:fire-off"></ha-icon></div>
+          <div class="info">
+            <div class="primary" id="name-${key}">Zone ${i}</div>
+            <div class="secondary" id="sub-${key}">Off</div>
+          </div>
+        </ha-card>
+      `;
+    }
+
+    const waterCardHtml = showWater
+      ? `
+        <ha-card id="card-water">
+          <div class="icon-wrap" id="icon-water"><ha-icon icon="mdi:water-boiler-off"></ha-icon></div>
+          <div class="info">
+            <div class="primary" id="name-water">Hot Water Boost</div>
+            <div class="secondary" id="sub-water">Off</div>
+          </div>
+        </ha-card>
+      `
+      : "";
+
+    const gridCols = count === 1 ? "1fr" : "1fr 1fr";
+
     this.shadowRoot.innerHTML = `
       <style>
         .grid { display: flex; flex-direction: column; gap: 10px; }
-        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .zones-grid { display: grid; grid-template-columns: ${gridCols}; gap: 10px; }
         ha-card {
           display: flex; align-items: center; gap: 12px;
           padding: 12px; cursor: pointer; user-select: none;
@@ -161,7 +220,7 @@ class HiveBoostCard extends HTMLElement {
         }
         ha-card:active { transform: scale(0.98); }
         .icon-wrap {
-          width: 40px; height: 40px; border-radius: 50%;
+          width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
           background: rgba(158, 158, 158, 0.15); color: var(--secondary-text-color);
           transition: background 0.2s, color 0.2s;
@@ -170,108 +229,120 @@ class HiveBoostCard extends HTMLElement {
           background: rgba(255, 87, 34, 0.2); color: #ff5722;
         }
         .info { display: flex; flex-direction: column; overflow: hidden; }
-        .primary { font-weight: 500; font-size: 14px; color: var(--primary-text-color); }
+        .primary { font-weight: 500; font-size: 14px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .secondary { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
-        .hidden { display: none !important; }
       </style>
       <div class="grid">
-        <div class="row" id="heating-row">
-          <ha-card id="card-up">
-            <div class="icon-wrap" id="icon-up"><ha-icon icon="mdi:fire-off"></ha-icon></div>
-            <div class="info">
-              <div class="primary" id="name-up"></div>
-              <div class="secondary" id="sub-up">Off</div>
-            </div>
-          </ha-card>
-          <ha-card id="card-down">
-            <div class="icon-wrap" id="icon-down"><ha-icon icon="mdi:fire-off"></ha-icon></div>
-            <div class="info">
-              <div class="primary" id="name-down"></div>
-              <div class="secondary" id="sub-down">Off</div>
-            </div>
-          </ha-card>
-        </div>
-        <ha-card id="card-water">
-          <div class="icon-wrap" id="icon-water"><ha-icon icon="mdi:water-boiler-off"></ha-icon></div>
-          <div class="info">
-            <div class="primary" id="name-water"></div>
-            <div class="secondary" id="sub-water">Off</div>
-          </div>
-        </ha-card>
+        ${count > 0 ? `<div class="zones-grid">${zoneCardsHtml}</div>` : ""}
+        ${waterCardHtml}
       </div>
     `;
 
-    this._bindEvents(this.shadowRoot.getElementById("card-up"), "up");
-    this._bindEvents(this.shadowRoot.getElementById("card-down"), "down");
-    this._bindEvents(this.shadowRoot.getElementById("card-water"), "water");
+    for (let i = 1; i <= count; i++) {
+      const key = `zone_${i}`;
+      const el = this.shadowRoot.getElementById(`card-${key}`);
+      if (el) this._bindEvents(el, key);
+    }
+
+    if (showWater) {
+      const waterEl = this.shadowRoot.getElementById("card-water");
+      if (waterEl) this._bindEvents(waterEl, "water");
+    }
+
     this._updateUI();
   }
 
   _updateUI() {
-    if (!this._config || !this.shadowRoot.getElementById("card-up")) return;
+    if (!this._config) return;
+    const count = Number(this._config.zone_count) || 0;
 
-    const zones = [
-      {
-        key: "up",
-        name: this._config.up_name,
-        climate: this._config.up_climate,
-        sensor: this._config.up_sensor,
-        onIcon: "mdi:fire",
-        offIcon: "mdi:fire-off",
-      },
-      {
-        key: "down",
-        name: this._config.down_name,
-        climate: this._config.down_climate,
-        sensor: this._config.down_sensor,
-        onIcon: "mdi:fire",
-        offIcon: "mdi:fire-off",
-      },
-      {
-        key: "water",
-        name: this._config.water_name,
-        entity: this._config.water_entity,
-        sensor: this._config.water_sensor,
-        onIcon: "mdi:water-boiler",
-        offIcon: "mdi:water-boiler-off",
-      },
-    ];
+    for (let i = 1; i <= count; i++) {
+      const key = `zone_${i}`;
+      const card = this.shadowRoot.getElementById(`card-${key}`);
+      if (!card) continue;
 
-    zones.forEach((z) => {
-      const card = this.shadowRoot.getElementById(`card-${z.key}`);
-      const configured = z.key === "water" ? z.entity : z.climate;
-      card.classList.toggle("hidden", !configured);
-      if (!configured) return;
+      const name = this._config[`${key}_name`] || `Zone ${i}`;
+      const climateId = this._config[`${key}_climate`];
+      const sensorId = this._config[`${key}_sensor`];
 
-      this.shadowRoot.getElementById(`name-${z.key}`).textContent = z.name;
+      this.shadowRoot.getElementById(`name-${key}`).textContent = name;
 
       const sensorActive =
-        z.sensor &&
-        this._hass?.states[z.sensor] &&
-        this._hass.states[z.sensor].state === "on";
-      const stage = this._state[z.key];
+        sensorId &&
+        this._hass?.states[sensorId] &&
+        this._hass.states[sensorId].state === "on";
+      const stage = this._state[key] || "Off";
       const isActive = stage !== "Off" || sensorActive;
 
-      const iconWrap = this.shadowRoot.getElementById(`icon-${z.key}`);
+      const iconWrap = this.shadowRoot.getElementById(`icon-${key}`);
       iconWrap.classList.toggle("active", isActive);
-      iconWrap.querySelector("ha-icon").setAttribute("icon", isActive ? z.onIcon : z.offIcon);
+      iconWrap
+        .querySelector("ha-icon")
+        .setAttribute("icon", isActive ? "mdi:fire" : "mdi:fire-off");
 
-      const statusText = stage !== "Off" ? stage : sensorActive ? "Active" : "Off";
-      if (z.key !== "water" && this._hass?.states[z.climate]) {
-        const temp = this._hass.states[z.climate].attributes.current_temperature;
-        this.shadowRoot.getElementById(`sub-${z.key}`).textContent =
+      const statusText =
+        stage !== "Off" ? stage : sensorActive ? "Active" : "Off";
+      if (climateId && this._hass?.states[climateId]) {
+        const temp = this._hass.states[climateId].attributes.current_temperature;
+        this.shadowRoot.getElementById(`sub-${key}`).textContent =
           temp !== undefined ? `${temp}°C • ${statusText}` : statusText;
       } else {
-        this.shadowRoot.getElementById(`sub-${z.key}`).textContent = statusText;
+        this.shadowRoot.getElementById(`sub-${key}`).textContent = statusText;
       }
-    });
+    }
+
+    if (this._config.water_enabled !== false) {
+      const waterCard = this.shadowRoot.getElementById("card-water");
+      if (!waterCard) return;
+
+      const name = this._config.water_name || "Hot Water Boost";
+      const sensorId = this._config.water_sensor;
+
+      this.shadowRoot.getElementById("name-water").textContent = name;
+
+      const sensorActive =
+        sensorId &&
+        this._hass?.states[sensorId] &&
+        this._hass.states[sensorId].state === "on";
+      const stage = this._state.water || "Off";
+      const isActive = stage !== "Off" || sensorActive;
+
+      const iconWrap = this.shadowRoot.getElementById("icon-water");
+      iconWrap.classList.toggle("active", isActive);
+      iconWrap
+        .querySelector("ha-icon")
+        .setAttribute(
+          "icon",
+          isActive ? "mdi:water-boiler" : "mdi:water-boiler-off"
+        );
+
+      const statusText =
+        stage !== "Off" ? stage : sensorActive ? "Active" : "Off";
+      this.shadowRoot.getElementById("sub-water").textContent = statusText;
+    }
   }
 }
 
 class HiveBoostCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = config;
-    this._render();
+    const prevCount = this._config ? Number(this._config.zone_count) : null;
+    const prevWater = this._config ? this._config.water_enabled : null;
+
+    this._config = {
+      zone_count: 2,
+      temperature: 21.0,
+      water_enabled: true,
+      ...config,
+    };
+
+    const countChanged = prevCount !== Number(this._config.zone_count);
+    const waterChanged = prevWater !== this._config.water_enabled;
+
+    if (!this._form || countChanged || waterChanged) {
+      this._buildForm();
+    } else {
+      this._form.data = this._config;
+    }
   }
 
   set hass(hass) {
@@ -279,57 +350,89 @@ class HiveBoostCardEditor extends HTMLElement {
     if (this._form) this._form.hass = hass;
   }
 
-  _render() {
-    if (this._form) {
-      this._form.data = this._config;
-      return;
-    }
-
-    this._form = document.createElement("ha-form");
-    this._form.hass = this._hass;
-    this._form.data = this._config;
-    this._form.schema = [
+  _buildSchema() {
+    const count = Number(this._config.zone_count) ?? 2;
+    const schema = [
+      {
+        name: "zone_count",
+        label: "Number of Heating Zones",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: 0, label: "0 Zones (Hot Water Only)" },
+              { value: 1, label: "1 Zone" },
+              { value: 2, label: "2 Zones" },
+              { value: 3, label: "3 Zones" },
+              { value: 4, label: "4 Zones" },
+            ],
+          },
+        },
+      },
       {
         name: "temperature",
         label: "Boost Target Temperature (°C)",
         selector: { number: { min: 10, max: 30, step: 0.5, mode: "box" } },
       },
-      { name: "up_name", label: "Zone 1 Label", selector: { text: {} } },
-      {
-        name: "up_climate",
-        label: "Zone 1 Climate Entity",
-        selector: { entity: { domain: "climate" } },
-      },
-      {
-        name: "up_sensor",
-        label: "Zone 1 Boost Sensor (Optional)",
-        selector: { entity: { domain: "binary_sensor" } },
-      },
-      { name: "down_name", label: "Zone 2 Label", selector: { text: {} } },
-      {
-        name: "down_climate",
-        label: "Zone 2 Climate Entity",
-        selector: { entity: { domain: "climate" } },
-      },
-      {
-        name: "down_sensor",
-        label: "Zone 2 Boost Sensor (Optional)",
-        selector: { entity: { domain: "binary_sensor" } },
-      },
-      { name: "water_name", label: "Hot Water Label", selector: { text: {} } },
-      {
-        name: "water_entity",
-        label: "Hot Water Entity",
-        selector: { entity: { domain: "water_heater" } },
-      },
-      {
-        name: "water_sensor",
-        label: "Hot Water Boost Sensor (Optional)",
-        selector: { entity: { domain: "binary_sensor" } },
-      },
     ];
 
+    for (let i = 1; i <= count; i++) {
+      schema.push(
+        {
+          name: `zone_${i}_name`,
+          label: `Zone ${i} Label`,
+          selector: { text: {} },
+        },
+        {
+          name: `zone_${i}_climate`,
+          label: `Zone ${i} Climate Entity`,
+          selector: { entity: { domain: "climate" } },
+        },
+        {
+          name: `zone_${i}_sensor`,
+          label: `Zone ${i} Boost Sensor (Optional)`,
+          selector: { entity: { domain: "binary_sensor" } },
+        }
+      );
+    }
+
+    schema.push({
+      name: "water_enabled",
+      label: "Include Hot Water Boost",
+      selector: { boolean: {} },
+    });
+
+    if (this._config.water_enabled !== false) {
+      schema.push(
+        {
+          name: "water_name",
+          label: "Hot Water Label",
+          selector: { text: {} },
+        },
+        {
+          name: "water_entity",
+          label: "Hot Water Entity",
+          selector: { entity: { domain: "water_heater" } },
+        },
+        {
+          name: "water_sensor",
+          label: "Hot Water Boost Sensor (Optional)",
+          selector: { entity: { domain: "binary_sensor" } },
+        }
+      );
+    }
+
+    return schema;
+  }
+
+  _buildForm() {
+    this.innerHTML = "";
+    this._form = document.createElement("ha-form");
+    this._form.hass = this._hass;
+    this._form.data = this._config;
+    this._form.schema = this._buildSchema();
     this._form.computeLabel = (schema) => schema.label || schema.name;
+
     this._form.addEventListener("value-changed", (ev) => {
       this.dispatchEvent(
         new CustomEvent("config-changed", {
