@@ -6,12 +6,12 @@ A clean, interactive custom Lovelace card for Home Assistant that lets you cycle
 
 ## Features
 
-- **Flexible Zone Onboarding:** Choose between `0` to `4` heating zones and toggle Hot Water Boost on or off during setup—the visual editor dynamically reveals only the configuration fields you need.
+- **Flexible Multi-Zone Support:** Choose between `0` and `4` heating zones during setup, plus an optional Hot Water Boost button.
 - **Single-Tap Duration Cycling:** Tap any button to cycle through `30m` → `1h` → `1.5h` → `2h` → `Off`.
 - **Press & Hold to Cancel:** Hold any button for ~0.65 seconds to immediately cancel an active boost (including boosts started externally from the Hive app or physical thermostat).
 - **Live Room Temperatures:** Displays the current room temperature directly alongside the active boost stage for each heating zone.
 - **External Boost Sync:** Automatically highlights buttons in deep orange and shows `Active` when a boost is triggered outside Home Assistant.
-- **Adaptive Grid Layout:** Automatically renders a single full-width card for 1 zone or a balanced 2-column grid for 2 to 4 zones, with Hot Water neatly placed below.
+- **Built-In Visual Editor:** Pick your zone count, Hive climate entities, hot water entity, boost binary sensors, and target boost temperature using native dropdown menus—no YAML required.
 
 ---
 
@@ -41,11 +41,10 @@ A clean, interactive custom Lovelace card for Home Assistant that lets you cycle
 1. Open any dashboard and click **Edit Dashboard** (pencil icon).
 2. Click **Add Card** and search for **Hive Boost Card**.
 3. Use the visual onboarding editor to configure your setup:
-   - **Number of Heating Zones:** Select `0` (Hot Water only) up to `4` heating zones.
-   - **Include Hot Water Boost:** Toggle on or off depending on your Hive setup.
+   - **Number of Heating Zones:** Select `0` to `4` zones depending on your home setup.
+   - **Include Hot Water Boost:** Toggle on or off depending on whether your Hive hub controls hot water.
    - **Boost Target Temperature (°C):** Set the temperature applied when boosting heating (default: `21.0`).
-   - **Zone Configuration:** For each active zone, customize its label, pick your Hive `climate` entity, and optionally link its boost `binary_sensor` for external boost sync and auto-reset.
-   - **Hot Water Configuration:** Customize the label, select your Hive `water_heater` entity, and optionally link its boost `binary_sensor`.
+   - **Zone Entities:** For each enabled zone, enter a custom label, pick its Hive `climate` entity, and optionally link its boost `binary_sensor` for external sync and auto-reset.
 4. Click **Save**.
 
 ### Example YAML Configuration
@@ -76,3 +75,9 @@ water_sensor: binary_sensor.hotwater_boost
 | :--- | :--- |
 | **Single Tap** | Advances boost duration: `30m` → `1h` → `1.5h` → `2h` → `Off` |
 | **Press & Hold** | Immediately cancels any active internal or external boost and resets to `Off` |
+
+---
+
+## Credits & Notes
+
+Built and tested on a multi-zone Hive setup with AI coding assistance. Feel free to open an issue on GitHub if you spot a bug or have a suggestion!
