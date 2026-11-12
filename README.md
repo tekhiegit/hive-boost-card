@@ -6,12 +6,12 @@ A clean, interactive custom Lovelace card for Home Assistant that lets you cycle
 
 ## Features
 
-- **Flexible Multi-Zone Support:** Choose between `0` and `4` heating zones during setup, plus an optional Hot Water Boost button.
 - **Single-Tap Duration Cycling:** Tap any button to cycle through `30m` → `1h` → `1.5h` → `2h` → `Off`.
-- **Press & Hold to Cancel:** Hold any button for ~0.65 seconds to immediately cancel an active boost (including boosts started externally from the Hive app or physical thermostat).
+- **Built-In 1.5-Second API Debounce:** Rapidly tapping through boost durations updates the card UI immediately while waiting **1.5 seconds** after your last tap before sending the command to Hive. This prevents hitting Hive's cloud API rate limits with unnecessary intermediate requests while selecting longer boost times.
+- **Press & Hold to Cancel:** Hold any button for ~0.65 seconds to immediately cancel an active boost (including boosts started externally from the Hive app or physical thermostat) with no delay.
 - **Live Room Temperatures:** Displays the current room temperature directly alongside the active boost stage for each heating zone.
 - **External Boost Sync:** Automatically highlights buttons in deep orange and shows `Active` when a boost is triggered outside Home Assistant.
-- **Built-In Visual Editor:** Pick your zone count, Hive climate entities, hot water entity, boost binary sensors, and target boost temperature using native dropdown menus—no YAML required.
+- **Built-In Visual Onboarding Editor:** Choose how many heating zones you want to control (`0` to `4`), toggle Hot Water Boost on or off, and pick your Hive entities using grouped visual dropdown menus—no YAML required.
 
 ---
 
@@ -41,10 +41,10 @@ A clean, interactive custom Lovelace card for Home Assistant that lets you cycle
 1. Open any dashboard and click **Edit Dashboard** (pencil icon).
 2. Click **Add Card** and search for **Hive Boost Card**.
 3. Use the visual onboarding editor to configure your setup:
-   - **Number of Heating Zones:** Select `0` to `4` zones depending on your home setup.
-   - **Include Hot Water Boost:** Toggle on or off depending on whether your Hive hub controls hot water.
+   - **Number of Heating Zones:** Select `0` to `4` zones depending on your Hive setup.
    - **Boost Target Temperature (°C):** Set the temperature applied when boosting heating (default: `21.0`).
-   - **Zone Entities:** For each enabled zone, enter a custom label, pick its Hive `climate` entity, and optionally link its boost `binary_sensor` for external sync and auto-reset.
+   - **Heating Zones:** Optionally enter a custom label (or leave blank to automatically use your entity's friendly name), select your Hive `climate` entity, and optionally link its boost `binary_sensor` for external sync and auto-reset.
+   - **Hot Water:** Toggle **Include Hot Water Boost** on or off, choose a label, select your Hive `water_heater` entity, and optionally link its boost `binary_sensor`.
 4. Click **Save**.
 
 ### Example YAML Configuration
@@ -54,7 +54,6 @@ If you prefer configuring cards via YAML, here is an example 2-zone + hot water 
 ```yaml
 type: custom:hive-boost-card
 zone_count: 2
-include_water: true
 temperature: 21
 zone_1_name: Upstairs
 zone_1_climate: climate.heating_up
@@ -62,6 +61,7 @@ zone_1_sensor: binary_sensor.heating_up_boost
 zone_2_name: Downstairs
 zone_2_climate: climate.heating_down
 zone_2_sensor: binary_sensor.heating_down_boost
+include_water: true
 water_name: Hot Water Boost
 water_entity: water_heater.heating_down
 water_sensor: binary_sensor.hotwater_boost
@@ -73,7 +73,7 @@ water_sensor: binary_sensor.hotwater_boost
 
 | Action | Behavior |
 | :--- | :--- |
-| **Single Tap** | Advances boost duration: `30m` → `1h` → `1.5h` → `2h` → `Off` |
+| **Single Tap** | Advances boost duration (`30m` → `1h` → `1.5h` → `2h` → `Off`) and sends the final selection after a **1.5-second pause** to protect Hive API rate limits |
 | **Press & Hold** | Immediately cancels any active internal or external boost and resets to `Off` |
 
 ---
