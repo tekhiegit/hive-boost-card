@@ -2,7 +2,7 @@
 
 A clean, interactive custom Lovelace card for Home Assistant that lets you cycle through Hive heating and hot water boost durations with a single tap, display live room temperatures, and cancel active boosts with a press-and-hold.
 
-![Hive Boost Card Preview](preview.png)
+![Hive Boost Card Preview](image_bf28645e.jpg)
 
 ## Features
 
