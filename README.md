@@ -1,18 +1,18 @@
 # Hive Boost Card for Home Assistant
 
-A clean, interactive custom Lovelace card for Home Assistant that lets you cycle through Hive heating and hot water boost durations with a single tap, display live room temperatures, and cancel active boosts with a press-and-hold.
+A clean, standalone custom Lovelace card for Home Assistant that lets you cycle through Hive heating and hot water boost durations with a single tap, view live room temperatures and remaining boost countdowns, and cancel active boosts individually or all at once.
 
 ![Hive Boost Card Preview](card.jpg)
 
 ## Features
 
-- **Flexible Zone Support (0 to 4 Zones):** Choose anywhere from `0` to `4` independent heating zones during setup, plus an optional toggle for **Hot Water Boost**.
 - **Single-Tap Duration Cycling:** Tap any button to cycle through `30m` → `1h` → `1.5h` → `2h` → `Off`.
-- **Smart 1.5-Second API Debounce:** Rapid taps cycle the UI instantly and queue your final selection for **1.5 seconds** before sending a single command to Hive—preventing you from hitting Hive's cloud API rate limits when tapping through to longer durations.
-- **Instant Press & Hold to Cancel:** Hold any button for ~0.65 seconds to bypass the debounce and immediately cancel an active boost (including boosts started externally from the Hive app or physical thermostat).
-- **Live Room Temperatures:** Displays the current room temperature directly alongside the active boost stage for each heating zone.
-- **External Boost Sync:** Automatically highlights buttons in deep orange and shows `Active` when a boost is triggered outside Home Assistant.
-- **Grouped Visual Editor:** Pick your zone count, custom labels, Hive `climate` zones, `water_heater` entity, boost `binary_sensor` entities, and target boost temperature using native dropdown menus—no YAML required.
+- **Live Boost Countdown:** Displays the remaining boost time in real time (e.g., `18.6°C • 42m left` or `1h 15m left`), syncing with Hive sensor attributes as well as internal timers.
+- **Cancel All Boosts Button:** Optional one-tap **Cancel All** button on the bottom row alongside Hot Water Boost to stop every active heating and hot water boost simultaneously.
+- **1.5-Second API Debounce:** Waits 1.5 seconds after your last tap before sending the boost command to Hive. This prevents hitting Hive's cloud API rate limits when tapping quickly through longer boost durations while keeping UI feedback instant.
+- **Press & Hold to Cancel:** Hold any individual button for ~0.65 seconds to immediately cancel that zone's boost (including boosts started externally from the Hive app or physical thermostat).
+- **Live Room Temperatures & External Sync:** Displays current room temperatures and automatically highlights buttons in deep orange when a boost is running outside Home Assistant.
+- **Built-In Visual Editor:** Configure `0`–`4` heating zones, toggle Hot Water Boost, toggle Cancel All, and pick your Hive entities using grouped native dropdown menus—no YAML or extra cards required.
 
 ---
 
@@ -41,17 +41,17 @@ A clean, interactive custom Lovelace card for Home Assistant that lets you cycle
 
 1. Open any dashboard and click **Edit Dashboard** (pencil icon).
 2. Click **Add Card** and search for **Hive Boost Card**.
-3. Use the visual onboarding editor to configure your setup:
-   - **General Settings:** Select the **Number of Heating Zones** (`0` to `4`) and set your **Boost Target Temperature (°C)** (default: `21.0`).
-   - **Heating Zones (1–4):** Enter an optional custom label (or leave blank to automatically use the entity's friendly name), select your Hive `climate` entity, and optionally link its boost `binary_sensor` for external sync and auto-reset.
-   - **Hot Water:** Toggle **Include Hot Water Boost** on or off, set an optional custom label, select your Hive `water_heater` entity, and optionally link its boost `binary_sensor`.
+3. Use the grouped visual editor to configure your setup:
+   - **General Settings:** Choose the **Number of Heating Zones** (`0` to `4`) and set your **Boost Target Temperature (°C)** (default: `21.0`).
+   - **Heating Zones (1–4):** Enter an optional custom label (or leave blank to use the entity's friendly name), select your Hive `climate` entity, and optionally link its boost `binary_sensor` for live countdown syncing and external boost detection.
+   - **Hot Water & Actions:** Toggle **Include Hot Water Boost** on or off, pick your Hive `water_heater` entity and boost `binary_sensor`, and toggle the **Include Cancel All Button** on or off.
 4. Click **Save**.
 
 ![Hive Boost Card Configuration](configuration.jpg)
 
 ### Example YAML Configuration
 
-If you prefer configuring cards via YAML, here is an example 2-zone setup with hot water:
+If you prefer configuring cards via YAML, here is an example 2-zone setup with Hot Water and Cancel All enabled:
 
 ```yaml
 type: custom:hive-boost-card
@@ -67,6 +67,8 @@ include_water: true
 water_name: Hot Water Boost
 water_entity: water_heater.heating_down
 water_sensor: binary_sensor.hotwater_boost
+include_cancel_all: true
+cancel_all_name: Cancel All
 ```
 
 ---
@@ -75,8 +77,9 @@ water_sensor: binary_sensor.hotwater_boost
 
 | Action | Behavior |
 | :--- | :--- |
-| **Single Tap** | Advances boost duration (`30m` → `1h` → `1.5h` → `2h` → `Off`) and sends the command after a **1.5-second debounce** so rapid taps don't trigger Hive API rate limits |
-| **Press & Hold** | Immediately cancels any pending debounce or active internal/external boost and resets to `Off` |
+| **Single Tap** | Cycles boost duration (`30m` → `1h` → `1.5h` → `2h` → `Off`) and sends the request after a **1.5-second pause** |
+| **Press & Hold** | Immediately cancels that zone's active internal or external boost with zero delay |
+| **Tap Cancel All** | Immediately stops all active heating and hot water boosts across every configured zone |
 
 ---
 
